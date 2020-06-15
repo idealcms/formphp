@@ -25,6 +25,9 @@ class AbstractField
     /** @var string JavaScript необходимыя для работы поля */
     protected $js;
 
+    /** @var array Список ошибок, возникнувших при проверке поля навешенными на него валидаторами */
+    protected $errorMsg = [];
+
     /**
      * Добавление элемента к форме
      *
@@ -86,6 +89,9 @@ class AbstractField
         foreach ($this->validators as $validator) {
             /** @var \FormPhp\Validator\AbstractValidator $validator */
             $valid = $validator->checkValue($value);
+            if (!$valid) {
+                $this->errorMsg[] = ['name' => $this->name, 'error' => $validator->getErrorMsg()];
+            }
             $result = $result && $valid;
         }
         return $result;
@@ -157,5 +163,15 @@ class AbstractField
     public function getInputText()
     {
         return '';
+    }
+
+    /**
+     * Получаем список ошибок, возникнувших при проверке поля валидаторами
+     *
+     * @return array
+     */
+    public function getErrorMsg()
+    {
+        return $this->errorMsg;
     }
 }

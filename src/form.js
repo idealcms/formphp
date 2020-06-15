@@ -3,6 +3,7 @@
     /**
      * Функция для привязки к форме события на клик и сабмит формы
      * @param options Объект с параметрами обработки формы
+     * @param messages Объект со списком сообщений
      * @returns {$}
      */
     $.fn.idealForm = function (options, messages) {
@@ -23,10 +24,9 @@
             ajaxSend: true, // отправка формы через ajax
             iframeSend: false, // нужно ли отправлять через iframe (требуется для прикрепления файлов через ajax)
             disableSubmit: false, // для внутреннего использования (блокирует кнопку отправки после однократного нажатия)
-            msgSubmitError: 'Форма не отправилась. Попробуйте повторить отправку позже.'
         }, options);
         form.messages = $.extend({
-            ajaxError: 'Форма не отправилась. Попробуйте повторить отправку позже.',
+            submitError: "Форма не отправилась. Попробуйте повторить отправку позже.\n",
             notValid: 'Поля заполнены неверно!',
             errors: [],
             validate: true
@@ -34,7 +34,7 @@
 
         $(document)
             .off('submit.form-plugin', this.selector, onAjaxSubmit)
-            .on('submit.form-plugin', this.selector, onAjaxSubmit);
+            .on('submit.form-plugin', this.selector, options, onAjaxSubmit);
         return this;
     };
 
@@ -85,6 +85,9 @@
                 locationFieldRemove.apply(this);
             } else {
                 // Выполняем обычный submit
+                this.defaultSubmit = true;
+                this.disableSubmit = false;
+                $(this).trigger('submit');
                 return true;
             }
         }
@@ -115,6 +118,9 @@
         // Разблокируем кнопку отправки формы
         $(this).find(':submit').removeAttr('disabled');
         this.disableSubmit = false;
+        // Генерируем событие успешной отправки формы
+        $(this).trigger('form.sendSuccess', [result]);
+
         if (this.options.redirect !== '') {
             // Если нужно - редиректим на указанную страницу
             document.location.href = this.options.redirect;
@@ -128,13 +134,16 @@
     function idealFormError(result)
     {
         // Выводим сообщение о неудаче и текст ответа сервера
-        var errorMessage = this.options.msgSubmitError + "\n" + result.responseText;
+        var errorMessage = this.messages.submitError + result.responseText;
+        // Если ошибка валидации, то выводим текст ошибки, если ошибка сервера, то responseText
         errorMessage = result.status === 'error' ? result.errorText : errorMessage;
         alert(errorMessage);
         // todo Добавляем текст об ошибке к соответствующим полям
         // Разблокируем кнопку отправки формы
         $(this).find(':submit').removeAttr('disabled');
         this.disableSubmit = false;
+        // Генерируем событие ошибки при отправке формы
+        $(this).trigger('form.sendError', [result]);
     }
 
     /**
@@ -147,7 +156,8 @@
 
         $form.find('.error-text').remove();
         var values = $form.find('[name]');
-        var check = $.parseJSON(values.filter('[name = "_validators"]').val());
+        var check = values.filter('[name = "_validators"]');
+        check = check.length === 0 ? [] : $.parseJSON(check.val());
         var messages = this.messages;
 
         var isValid = true;

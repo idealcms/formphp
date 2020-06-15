@@ -18,11 +18,8 @@ class FormPhp
     /** @var \Ideal\FormPhp\Field\AbstractField[] Список полей ввода в форме */
     public $fields = array();
 
-    /** @var bool Флаг необходимости минификации кода */
-    public $isMinifier = false;
-
     /** @var array Список ошибок, возникших во время работы формы */
-    public $errors = false;
+    public $errors = [];
 
     /** @var string Название формы  */
     protected $formName;
@@ -351,8 +348,11 @@ class FormPhp
         foreach ($this->fields as $name => $field) {
             /** @var \Ideal\FormPhp\Field\AbstractField $field */
             $valid = $field->isValid();
+            if (!$valid) {
+                // Если были ошибки, то добавить их в общий список ошибок
+                $this->errors += $field->getErrorMsg();
+            }
             $result = $result && $valid;
-            // todo сделать к каждому полю уведомление об ошибках и метод, выдающий все сообщения об ошибках
         }
 
         return $result;
@@ -416,7 +416,7 @@ class FormPhp
      *
      * В передаваемом массиве могут быть следующие параметры:
      * options — json-массив настроек скрипта (ajaxUrl, ajaxDataType, location, successMessage, clearForm)
-     * messages — json-массив сообщений формы (ajaxError, notValid, errors, validate)
+     * messages — json-массив сообщений формы (submitError, notValid, errors, validate)
      * methods — объект со списком методов для переопределения стандартных методов формы
      *
      * @param array $arguments Массив аргументов js-функции формы
@@ -505,7 +505,7 @@ class FormPhp
     protected function renderCss()
     {
         $css = file_get_contents(__DIR__ .'/form.css');
-        $css = $this->minimizeCss($css);
+
         return $css;
     }
 
@@ -554,23 +554,28 @@ class FormPhp
 
         $js[] = $this->getSenderJs();
 
-        $location = ($this->locationValidation) ? ', location: true' : '';
-        $successMessage = (!$this->successMessage) ? ', successMessage: false' : '';
-        $clearForm = (!$this->clearForm) ? ', clearForm: false' : '';
-        $ajaxSend = (!$this->ajaxSend) ? ', ajaxSend: false' : '';
+        $options = [
+            'ajaxUrl' => $this->ajaxUrl,
+            'location' => $this->locationValidation,
+            'successMessage' => $this->successMessage,
+            'clearForm' => $this->clearForm,
+            'ajaxSend' => $this->ajaxSend,
+        ];
 
-        $options = isset($this->formJsArguments['options']) ? $this->formJsArguments['options'] : '{}';
-        // todo решить, что делать с messages и methods
-        $messages = isset($this->formJsArguments['messages']) ? $this->formJsArguments['messages'] : '{}';
+        if (isset($this->formJsArguments['options'])) {
+            $options += $this->formJsArguments['options'];
+        }
+
+        $messages = isset($this->formJsArguments['messages']) ? $this->formJsArguments['messages'] : [];
+
+        // todo решить, что делать с methods
         $methods = isset($this->formJsArguments['methods']) ? $this->formJsArguments['methods'] : '{}';
 
-        $params = "{ajaxUrl : '{$this->ajaxUrl}'{$location}{$successMessage}{$clearForm}{$ajaxSend}}";
+        $options = json_encode($options);
+        $messages = json_encode($messages);
 
-        $ajaxUrl = <<<JS
-            $('#{$this->formName}').idealForm(
-                $.extend({$params}, {$options})
-            );
-JS;
+        $ajaxUrl = "$('#{$this->formName}').idealForm({$options}, {$messages});";
+
         $this->js = ''
             . implode("\n", $js)
             . "\njQuery(document).ready(function () {\n var $ = jQuery;\n"
@@ -578,8 +583,6 @@ JS;
             . $this->js
             . "\n" . $ajaxUrl
             . "\n"  . '})';
-
-        $this->js = $this->minimizeJs($this->js);
 
         return $this->js;
     }
@@ -597,14 +600,14 @@ JS;
      */
     public function sendMail($from, $to, $title, $body, $html = false, $smtpParams = array())
     {
-        if (!class_exists('\Mail\Sender')) {
+        if (!class_exists('\Ideal\Mailer')) {
             // Окружение не инициализировано и продвинутого класса отправки почты нет
             // Поэтому шлём самое простое письмо
             $response = mail($to, $title, $body, 'From: ' . $from);
             return $response;
         }
         /** @noinspection PhpUnnecessaryFullyQualifiedNameInspection */
-        $sender = new \Mail\Sender();
+        $sender = new \Ideal\Mailer();
         if (!empty($smtpParams)) {
             $sender->setSmtp($smtpParams);
         }
@@ -717,45 +720,61 @@ JS;
     }
 
     /**
-     * Минификация js-кода
-     *
-     * @param string $content Исходный js-код
-     * @return string Минифицированный js-код
+     * @param bool $isArray
+     * @return string
      */
-    protected function minimizeJs($content)
+    public function getErrors($isArray = false)
     {
-        if ($this->isMinifier) {
-            $path = stream_resolve_include_path('Minifier/jShrink.php');
-            if ($path) {
-                require_once $path;
-                $content = \JShrink\Minifier::minify($content, array('flaggedComments' => true));
-            }
+        if (empty($this->errors)) {
+            return '';
         }
 
-        return $content;
+        if ($isArray) {
+            return $this->errors;
+        }
+
+        $text = '';
+        foreach ($this->errors as $error) {
+            $text .= $error['name'] . ': ' . $error['error'];
+        }
+
+        return $text;
     }
 
     /**
-     * Минификация css-кода
+     * Генерация json-ответа при успешном заполнении формы
      *
-     * @param string $content Исходный css-код
-     * @return string Минифицированный css-код
+     * @param string $message
      */
-    protected function minimizeCss($content)
+    public function exitJsonSuccess($message = 'Форма заполнена правильно')
     {
-        if ($this->isMinifier) {
-            // Удаляем комментарии
-            $content = preg_replace('!/\*[^*]*\*+([^/][^*]*\*+)*/!', '', $content);
+        $this->setText(json_encode([
+            'status' => 'ok',
+            'text' => $message
+        ]));
+        $this->render();
+        exit;
+    }
 
-            // Удаляем табуляцию, пробелы, переводы строки и т.д.
-            $content = preg_replace('/(\s\s+|\t|\n)/', ' ', $content);
-
-            // Удаляем лишние пробелы до и после скобок
-            $content = preg_replace(array('(( )+{)', '({( )+)'), '{', $content);
-            $content = preg_replace(array('(( )+})', '(}( )+)', '(;( )*})'), '}', $content);
-            $content = preg_replace(array('(;( )+)', '(( )+;)'), ';', $content);
+    /**
+     * Генерация json-ответа при успешном заполнении формы
+     *
+     * @param string $message
+     */
+    public function exitJsonError($message = "Форма заполнена неправильно:\n")
+    {
+        $errorsText = '';
+        $errors = $this->getErrors(true);
+        if (!empty($errors)) {
+            foreach ($errors as $error) {
+                $errorsText .= $error['error'] . "\n";
+            }
         }
-
-        return $content;
+        $this->setText(json_encode([
+            'status' => 'error',
+            'errorText' => $message . "\n" . $errorsText
+        ]));
+        $this->render();
+        exit;
     }
 }
