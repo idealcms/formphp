@@ -661,6 +661,51 @@ class FormPhp
     }
 
     /**
+     * Получение файлов, переданных через форму
+     * Состав элементов массива: ['path' => '', 'type' => '', 'name' => '']
+     *
+     * @return array
+     */
+    public function getFiles()
+    {
+        if (!isset($_FILES) || empty($_FILES)) {
+            // Если файлы не прикреплены к письму, возвращаем пустой массив
+            return [];
+        }
+
+        // Если были переданы файлы, то записываем их координаты в массив $files
+        $files = [];
+        foreach ($_FILES as $file) {
+            if ($file['error'] == UPLOAD_ERR_OK) {
+                if ($file['name'] == '') {
+                    continue;
+                }
+                $files[] = [
+                    'path' => $file['tmp_name'],
+                    'type' => $file['type'],
+                    'name' => $file['name'],
+                ];
+            } elseif ($file['error'] != UPLOAD_ERR_NO_FILE) {
+                // Собираем данные о возникшей ошибке
+                switch ($file['error']) {
+                    case UPLOAD_ERR_INI_SIZE:
+                    case UPLOAD_ERR_FORM_SIZE:
+                        $this->errors[] = 'Файл слишком большой.';
+                        break;
+                    case UPLOAD_ERR_EXTENSION:
+                        $this->errors[] = 'Файл с таким расширением не может быть загружен.';
+                        break;
+                    default:
+                        $this->errors[] = 'Не удалось загрузить файл.';
+                        break;
+                }
+            }
+        }
+
+        return $files;
+    }
+
+    /**
      * Сохраняем в базу информацию о заказе и заказчике
      *
      * @param string $name Имя заказчика
