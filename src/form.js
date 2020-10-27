@@ -7,30 +7,31 @@
      * @returns {$}
      */
     $.fn.idealForm = function (options, messages) {
-        // Получаем форму, на которую навешивается обработчик
-        form = this[0];
-        // Флаг, который ставится только при отправке файлов через ajax
-        form.defaultSubmit = false;
-        // Устанавливаем флаг, разрешающий сабмит формы
-        form.disableSubmit = false;
-        // Записываем в форму её настройки
-        form.options = $.extend({
-            ajaxUrl: '/', // адрес для ajax-запроса
-            ajaxDataType: 'json', // тип получаемых данных
-            location: false, // нужно ли добавлять защиту через автогенерируемое поле location
-            successMessage:  true, // нужно ли выводить сообщение об успешной отправке
-            clearForm: true, // нужно ли очищать форму после удачной отправки
-            redirect: '', // куда делать редирект, после удачного заполнения формы
-            ajaxSend: true, // отправка формы через ajax
-            iframeSend: false, // нужно ли отправлять через iframe (требуется для прикрепления файлов через ajax)
-            disableSubmit: false, // для внутреннего использования (блокирует кнопку отправки после однократного нажатия)
-        }, options);
-        form.messages = $.extend({
-            submitError: "Форма не отправилась. Попробуйте повторить отправку позже.\n",
-            notValid: 'Поля заполнены неверно!',
-            errors: [],
-            validate: true
-        }, messages);
+        // Обходим все формы, на которые навешивается обработчик
+        $.each(this, function(index, form) {
+            // Флаг, который ставится только при отправке файлов через ajax
+            form.defaultSubmit = false;
+            // Устанавливаем флаг, разрешающий сабмит формы
+            form.disableSubmit = false;
+            // Записываем в форму её настройки
+            form.options = $.extend({
+                ajaxUrl: '/', // адрес для ajax-запроса
+                ajaxDataType: 'json', // тип получаемых данных
+                location: false, // нужно ли добавлять защиту через автогенерируемое поле location
+                successMessage:  true, // нужно ли выводить сообщение об успешной отправке
+                clearForm: true, // нужно ли очищать форму после удачной отправки
+                redirect: '', // куда делать редирект, после удачного заполнения формы
+                ajaxSend: true, // отправка формы через ajax
+                iframeSend: false, // нужно ли отправлять через iframe (требуется для прикрепления файлов через ajax)
+                disableSubmit: false, // для внутреннего использования (блокирует кнопку отправки после однократного нажатия)
+            }, options);
+            form.messages = $.extend({
+                submitError: "Форма не отправилась. Попробуйте повторить отправку позже.\n",
+                notValid: 'Поля заполнены неверно!',
+                errors: [],
+                validate: true
+            }, messages);
+        });
 
         $(document)
             .off('submit.form-plugin', this.selector, onAjaxSubmit)

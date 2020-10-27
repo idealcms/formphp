@@ -24,6 +24,9 @@ class FormPhp
     /** @var string Название формы  */
     protected $formName;
 
+    /** @var string Класс формы  */
+    protected $formClassName;
+
     /** @var string Метод передачи данных формы (POST||GET) */
     protected $method = 'POST';
 
@@ -72,7 +75,7 @@ class FormPhp
      * @param string $formName Название формы (используется в html-теге form)
      * @param bool $xhtml Если истина, то код полей ввода будет отображается в xhtml-стиле
      */
-    public function __construct($formName, $xhtml = true)
+    public function __construct($formName, $xhtml = true, $formClassName = '')
     {
         /**  Будет работать только на PHP 5.4, здесь можно проверить не запрещены ли сессии PHP_SESSION_DISABLED
         if(session_status() != PHP_SESSION_ACTIVE) {
@@ -86,6 +89,7 @@ class FormPhp
 
         $this->xhtml = $xhtml;
         $this->formName = $formName;
+        $this->formClassName = $formClassName;
 
         // Добавляем поля токена, реферера и текущей страницы.
         $this->add('_token', 'token');
@@ -574,7 +578,9 @@ class FormPhp
         $options = json_encode($options);
         $messages = json_encode($messages);
 
-        $ajaxUrl = "$('#{$this->formName}').idealForm({$options}, {$messages});";
+        $selector = empty($this->formClassName) ? '#' . $this->formName : '.' . $this->formClassName;
+
+        $ajaxUrl = "$('{$selector}').idealForm({$options}, {$messages});";
 
         $this->js = ''
             . implode("\n", $js)
