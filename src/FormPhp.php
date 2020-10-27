@@ -756,6 +756,7 @@ class FormPhp
     {
         $this->setText(json_encode([
             'status' => 'ok',
+            'data' => $this->getValues(),
             'text' => $message
         ]));
         $this->render();
@@ -778,9 +779,30 @@ class FormPhp
         }
         $this->setText(json_encode([
             'status' => 'error',
+            'data' => $this->getValues(),
             'errorText' => $message . "\n" . $errorsText
         ]));
         $this->render();
         exit;
+    }
+
+    /**
+     * Возвращает массив с заполненными данными формы
+     *
+     * При заполнении исключает технические поля, начинающиеся с подчёркивания
+     *
+     * @return array Данные формы
+     */
+    public function getValues()
+    {
+        $values = [];
+        foreach ($this->fields as $field) {
+            $name = $field->getName();
+            if (strpos($name, '_') === 0) {
+                continue;
+            }
+            $values[$name] = $this->getValue($name);
+        }
+        return $values;
     }
 }
