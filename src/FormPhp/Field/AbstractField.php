@@ -41,6 +41,16 @@ class AbstractField
     }
 
     /**
+     * Возвращает html-имя поля ввода
+     *
+     * @return string
+     */
+    public function getName()
+    {
+        return $this->name;
+    }
+
+    /**
      * Получение списка валидаторов, привязанных к этому полю
      *
      * @return array Список валидаторов
